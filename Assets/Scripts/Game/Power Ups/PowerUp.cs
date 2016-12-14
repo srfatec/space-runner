@@ -3,13 +3,14 @@ using System.Collections;
 
 public class PowerUp : MonoBehaviour {
 
-    public GameObject m_Projectile;
-    public Sprite m_Icon;    
+    public PowerUp[] m_PowerUps;
     private Transform m_Transform;
     private Rigidbody m_Rigidbody;
     private MeshRenderer m_MeshRenderer;
     private GravityBody m_GravityBody;
     private AudioSource m_AudioSource;
+    protected PowerUp m_Parent;
+    protected Sprite m_Icon;
 
     private void Awake()
     {
@@ -42,7 +43,34 @@ public class PowerUp : MonoBehaviour {
         if (col.transform.tag == "Player")
         {
             PlayerController Player = col.gameObject.GetComponentInParent<PlayerController>();
-            Player.PowerUpCollision(this);
+            if (Player.hasPowerUp())
+            {
+                return;
+            }
+            PowerUp script = m_PowerUps[Random.Range(0, m_PowerUps.Length)].GetComponent<PowerUp>();
+            script.setParent(this);
+            script.setIcon();                        
+            Player.PowerUpCollision(script);
         }
+    }
+
+    public virtual void Destroy()
+    {        
+        Destroy(this.m_Parent.gameObject);
+    }
+
+        void setParent(PowerUp parent)
+    {
+        m_Parent = parent;
+    }
+
+    public virtual void setIcon()
+    {
+        
+    }
+
+    public virtual Sprite getIcon()
+    {
+        return m_Icon;
     }
 }
