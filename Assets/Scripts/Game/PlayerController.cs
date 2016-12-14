@@ -4,7 +4,9 @@ using System.Collections.Generic;
 
 public class PlayerController : MonoBehaviour
 {
-    private int m_IdNumber = 0;    
+    private int m_IdNumber = 0;
+    private int m_CharacterNumber = 0;
+    private int m_ScreenPosition = 0;
     private float m_MaxSpeed;
     private float m_MinSpeed;
     private float m_Acceleration;
@@ -21,12 +23,17 @@ public class PlayerController : MonoBehaviour
     private float m_LoopTimer = 0.0f;
     private float m_DamagedTimer = 0.0f;
     private string m_State = "Default";
+    private Dictionary<string, float> m_StatusEffect = new Dictionary<string, float>();
     private List<int> m_WayPoints = new List<int>();
     private CameraController m_Camera;
     private CameraController m_RadarCamera;
     private GameObject m_Missile;
+    private GameObject m_TriggerMissile;
     private Transform m_SpawnPoint1;
     private GameObject m_PlayerMesh;
+    private GameObject m_PlayerSlowEffect;
+    private GameObject m_PlayerSlowEffectSmoke;
+    private GameObject m_PlayerSlowEffectSnowFlakes;
     private GameObject m_PlayerCursor;
     private GameObject m_PlayerWayPointArrow;
     private PowerUp m_PowerUpSlot;
@@ -34,6 +41,7 @@ public class PlayerController : MonoBehaviour
     private Transform m_CanvasEnergyBar;
     private Transform m_CanvasEnergyBarDamaged;
     private Transform m_CanvasCentralMessage;
+    private Transform m_CanvasPressBAgain;
     private Transform m_CanvasPowerUpIcon;
     private Rigidbody m_Rigidbody;
     private Transform m_Transform;    
@@ -42,7 +50,7 @@ public class PlayerController : MonoBehaviour
     private PlayerData m_PlayerData;
     private float m_DistanceFromSurface = 0.0f;
     private float m_TurnAngle = 0.0f;
-    private List<ImpactMovement> m_ImpactMovementList = new List<ImpactMovement>();
+    private List<ImpactMovement> m_ImpactMovementList = new List<ImpactMovement>();     
 
     private void Awake()
     {
@@ -52,7 +60,7 @@ public class PlayerController : MonoBehaviour
         m_GameController = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>();
         m_Camera = m_Transform.Find("Camera").gameObject.GetComponent<CameraController>();
         m_RadarCamera = m_Transform.Find("RadarCamera").gameObject.GetComponent<CameraController>();
-
+        m_StatusEffect["Slow"] = 0.0f;
         m_Rigidbody.useGravity = false;
         m_Rigidbody.constraints = RigidbodyConstraints.FreezeRotation;
         m_PowerUpSlot = null;
@@ -65,24 +73,42 @@ public class PlayerController : MonoBehaviour
         m_RadarCamera.SetDefaultPosition(m_RadarCamera.transform.localPosition);
         m_RadarCamera.SetDefaultRotation(m_RadarCamera.transform.localRotation);
 
-        if (m_IdNumber == 1)
-            m_RadarCamera.GetComponent<Camera>().rect = new Rect(0.397f, 0.514f, 0.1f, 0.2f);
-        else if (m_IdNumber == 2)
-            m_RadarCamera.GetComponent<Camera>().rect = new Rect(0.9f, 0.514f, 0.1f, 0.2f);
-        else if (m_IdNumber == 3)
-            m_RadarCamera.GetComponent<Camera>().rect = new Rect(0.397f, 0.0f, 0.1f, 0.2f);
-        else if (m_IdNumber == 4)
-            m_RadarCamera.GetComponent<Camera>().rect = new Rect(0.9f, 0.0f, 0.1f, 0.2f);
-        m_RadarCamera.GetComponent<Camera>().cullingMask = (1 << LayerMask.NameToLayer("Radar")) | (1 << LayerMask.NameToLayer("Radar" + m_IdNumber));
-        m_RadarCamera.transform.Find("radarFormato").gameObject.layer = LayerMask.NameToLayer("Radar" + m_IdNumber);
+        Camera m_RadarCameraComponent = m_RadarCamera.GetComponent<Camera>();
 
-        string PlayerName = "Prefabs/Player" + m_IdNumber;
-        m_PlayerMesh = (GameObject)Instantiate(Resources.Load(PlayerName), m_Transform.position, m_Transform.rotation);        
+        if (m_GameController.m_GlobalVariables.m_NumberOfPlayers == 2)
+        {
+            if (m_ScreenPosition == 1)
+                m_RadarCameraComponent.rect = new Rect(0.9f, 0.514f, 0.1f, 0.2f);
+            else if (m_ScreenPosition == 2)
+                m_RadarCameraComponent.rect = new Rect(0.9f, 0.0f, 0.1f, 0.2f);
+        }
+        else
+        {
+            if (m_ScreenPosition == 1)
+                m_RadarCameraComponent.rect = new Rect(0.397f, 0.514f, 0.1f, 0.2f);
+            else if (m_ScreenPosition == 2)
+                m_RadarCameraComponent.rect = new Rect(0.9f, 0.514f, 0.1f, 0.2f);
+            else if (m_ScreenPosition == 3)
+                m_RadarCameraComponent.rect = new Rect(0.397f, 0.0f, 0.1f, 0.2f);
+            else if (m_ScreenPosition == 4)
+                m_RadarCameraComponent.rect = new Rect(0.9f, 0.0f, 0.1f, 0.2f);
+        }
+        m_RadarCameraComponent.cullingMask = (1 << LayerMask.NameToLayer("Radar")) | (1 << LayerMask.NameToLayer("Radar" + m_IdNumber));
+        GameObject m_RadarFormat = m_RadarCamera.transform.Find("Canvas").transform.Find("radarFormato").gameObject;
+        m_RadarFormat.layer = LayerMask.NameToLayer("Radar" + m_IdNumber);
+        m_RadarFormat.GetComponent<RectTransform>().sizeDelta = new Vector2(m_RadarCameraComponent.pixelWidth, m_RadarCameraComponent.pixelHeight);        
+
+        string PlayerName = "Prefabs/Player" + m_CharacterNumber;
+        m_PlayerSlowEffect = m_Transform.Find("SlowEffect").gameObject;
+        m_PlayerSlowEffect.SetActive(false);
+        m_PlayerSlowEffectSmoke = m_PlayerSlowEffect.transform.Find("Smoke").gameObject;
+        m_PlayerSlowEffectSnowFlakes = m_PlayerSlowEffect.transform.Find("SnowFlakes").gameObject;
+        m_PlayerMesh = (GameObject)Instantiate(Resources.Load(PlayerName), m_Transform.position, m_Transform.rotation);
         m_PlayerData = m_PlayerMesh.GetComponent<PlayerData>();
         m_PlayerCursor = m_Transform.Find("Cursor").gameObject;
         m_PlayerWayPointArrow = m_Transform.Find("WayPointArrow").gameObject;
         m_PlayerWayPointArrow.layer = LayerMask.NameToLayer("Radar" + m_IdNumber);
-        m_PlayerWayPointArrow.SetActive(false);
+        //m_PlayerWayPointArrow.SetActive(false);
 
         m_MaxSpeed = m_PlayerData.m_MaxSpeed;
         m_MinSpeed = m_PlayerData.m_MinSpeed;
@@ -104,6 +130,28 @@ public class PlayerController : MonoBehaviour
         m_CanvasEnergyBarDamaged.gameObject.SetActive(false);
         m_CanvasCentralMessage = m_CanvasPanel.Find("CentralMessage");
         m_CanvasCentralMessage.gameObject.SetActive(false);
+        m_CanvasPressBAgain = m_CanvasPanel.Find("PressBAgain");
+        m_CanvasPressBAgain.gameObject.SetActive(false);
+
+    }
+
+    void Update()
+    {
+        ApplyStatusEffect("Slow", -15.0f * Time.deltaTime, 100.0f);
+        switch (m_State)
+        {
+            case "Default":                
+                PrimaryFireInputHandler();
+                SecondaryFireInputHandler();
+                SpinningInputHandler();
+                LoopInputHandler();
+                EnergyRecoveryRoutine();
+                break;
+            default:
+                break;
+        }
+        EnergyBarRoutine();
+        TurbineRoutine();
     }
 
     void FixedUpdate()
@@ -115,17 +163,12 @@ public class PlayerController : MonoBehaviour
                 m_CenterSphere.Attract(m_Rigidbody, m_Transform, 1.0f);
                 VerticalInputHandler();
                 HorizontalInputHandler();
-                PrimaryFireInputHandler();
-                SecondaryFireInputHandler();
-                SpinningInputHandler();
-                LoopInputHandler();
-                EnergyRecoveryRoutine();
                 m_PlayerMesh.transform.position = m_Transform.position;        
                 m_PlayerMesh.transform.rotation = m_Transform.rotation;
                 m_PlayerMesh.transform.Rotate(m_PlayerMesh.transform.forward, 180.0f, Space.World);
                 m_PlayerMesh.transform.Rotate(m_PlayerMesh.transform.forward, m_TurnAngle, Space.World);
                 break;
-		case "Spinning":
+            case "Spinning":
                 m_CenterSphere.Attract(m_Rigidbody, m_Transform, 1.0f);
                 VerticalInputHandler();
                 HorizontalInputHandler();
@@ -149,9 +192,8 @@ public class PlayerController : MonoBehaviour
                 break;
             default:
                 break;
-        }
-        EnergyBarRoutine();
-        //RadarArrowRoutine();
+        }                
+        RadarArrowRoutine();
     }
 
     void EnergyBarRoutine()
@@ -160,7 +202,7 @@ public class PlayerController : MonoBehaviour
         float CurrentWidth = rectTransform.sizeDelta.x;
         float CurrentBarEnergy = CurrentWidth * m_PlayerData.m_Energy / 200;
         float t = CurrentBarEnergy / m_PlayerData.m_Energy;
-        float Increment = 0.01f;
+        float Increment = 0.02f;
         if (CurrentBarEnergy > m_Energy)
         {
             t -= Increment;
@@ -192,30 +234,67 @@ public class PlayerController : MonoBehaviour
         m_EnergyRecoveryDelay -= Time.deltaTime;
     }
 
+    void TurbineRoutine()
+    {
+        foreach (ParticleSystem turbine in m_PlayerData.m_Turbine)
+        {
+            switch (m_State)
+            {
+                case "Default":
+                    if (Input.GetAxisRaw("VerticalJoy" + m_IdNumber.ToString()) > 0)                    
+                        turbine.startSpeed = 2.0f;                    
+                    else                    
+                        turbine.startSpeed = 0.8f;                                            
+                    break;
+                case "Spinning":
+                    if (Input.GetAxisRaw("VerticalJoy" + m_IdNumber.ToString()) > 0)
+                        turbine.startSpeed = 2.0f;
+                    else
+                        turbine.startSpeed = 0.8f;
+                    break;
+                case "Loop":
+                    turbine.startSpeed = 2.0f;
+                    break;
+                case "Damaged":
+                    turbine.startSpeed = 0.0f;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
     void VerticalInputHandler()
     {
-        if (Input.GetAxisRaw("VerticalJoy" + m_IdNumber.ToString()) > 0)
-            m_ActualSpeed += m_Acceleration * Time.deltaTime;
-        else if (Input.GetAxisRaw("VerticalJoy" + m_IdNumber.ToString()) < 0)
+        float ActualMinSpeed = m_MinSpeed - m_StatusEffect["Slow"] / 100 * m_MinSpeed;
+        float ActualMaxSpeed = m_MaxSpeed - m_StatusEffect["Slow"] / 100 * m_MaxSpeed;
+
+        if (Input.GetAxis("BrakeJoy" + m_IdNumber.ToString()) > 0.5f)
+        {
             m_ActualSpeed -= m_Deceleration * Time.deltaTime;
-            if (m_ActualSpeed < m_MinSpeed)            
-                m_ActualSpeed = m_MinSpeed;            
+            if (m_ActualSpeed < ActualMinSpeed)
+                m_ActualSpeed = ActualMinSpeed;
+        }
+        else if (Input.GetAxis("VerticalJoy" + m_IdNumber.ToString()) > 0.5f)
+        {
+            m_ActualSpeed += m_Acceleration * Time.deltaTime;
+        }
         else
-        {            
-            if (m_ActualSpeed < m_MinSpeed)
-            {                
+        {
+            if (m_ActualSpeed < ActualMinSpeed)
+            {
                 m_ActualSpeed += m_Acceleration * Time.deltaTime;
-                if (m_ActualSpeed > m_MinSpeed)
-                    m_ActualSpeed = m_MinSpeed;
+                if (m_ActualSpeed > ActualMinSpeed)
+                    m_ActualSpeed = ActualMinSpeed;
             }
-            else if (m_ActualSpeed > m_MinSpeed)
+            else if (m_ActualSpeed > ActualMinSpeed)
             {
                 m_ActualSpeed -= m_NormalDeceleration * Time.deltaTime;
             }
         }
             
-        if (m_ActualSpeed >= m_MaxSpeed)
-            m_ActualSpeed = m_MaxSpeed;
+        if (m_ActualSpeed >= ActualMaxSpeed)
+            m_ActualSpeed = ActualMaxSpeed;
         else if (m_ActualSpeed <= 0.0f)
             m_ActualSpeed = 0.0f;
 
@@ -226,9 +305,9 @@ public class PlayerController : MonoBehaviour
     void HorizontalInputHandler()
     {
         float maxTurnAngle = 45.0f;
-        float angle = m_Angle * Time.deltaTime;
-
-        if (Input.GetAxisRaw("HorizontalJoy" + m_IdNumber.ToString()) != 0)
+        float angle = m_Angle * Time.deltaTime;        
+        
+        if (Input.GetAxis("HorizontalJoy" + m_IdNumber.ToString()) < -0.9f || Input.GetAxis("HorizontalJoy" + m_IdNumber.ToString()) > 0.9f)
         {
             m_TurnAngle += Input.GetAxisRaw("HorizontalJoy" + m_IdNumber.ToString()) * angle * -1;
             if (m_TurnAngle >= maxTurnAngle)
@@ -252,10 +331,16 @@ public class PlayerController : MonoBehaviour
         m_Transform.Rotate(m_Transform.up, angle * m_TurnAngle / maxTurnAngle * -1, Space.World);
     }
 
-    public void Fire(GameObject missile, Transform spawnPoint)
+    public void Fire(GameObject missile, Transform spawnPoint, bool isExplodedByTrigger = false)
     {
         GameObject FiredMissile = (GameObject)Instantiate(missile, m_SpawnPoint1.position, m_Transform.rotation);
         MissileController missileController = FiredMissile.GetComponent<MissileController>();
+        if (isExplodedByTrigger)
+        {
+            m_TriggerMissile = FiredMissile;
+            missileController.setPowerUp(m_PowerUpSlot);
+            m_CanvasPressBAgain.gameObject.SetActive(true);
+        }                    
         missileController.m_Speed += m_ActualSpeed;
         missileController.setIdNumber(m_IdNumber);
         m_Energy -= missileController.m_Damage / 10;
@@ -263,11 +348,17 @@ public class PlayerController : MonoBehaviour
             m_Energy = 0.0f;        
     }
 
+    public void TriggerMissile()
+    {
+        MissileController missileController = m_TriggerMissile.GetComponent<MissileController>();
+        missileController.Trigger();
+        m_TriggerMissile = null;
+    }
+
     void PrimaryFireInputHandler()
     {
         m_AttackSpeedTimer += Time.deltaTime;
 
-        //if (Input.GetButton("Fire1") && m_AttackSpeedTimer >= m_AttackSpeed && m_Energy > 0.0f)
         if (Input.GetButton("Fire1Joy" + m_IdNumber.ToString()) && m_AttackSpeedTimer >= m_AttackSpeed)
         {
             Fire(m_Missile, m_SpawnPoint1);
@@ -277,9 +368,8 @@ public class PlayerController : MonoBehaviour
 
     void SecondaryFireInputHandler()
     {
-        //if (Input.GetButton("Fire2") && m_PowerUpSlot != null)
-        if (Input.GetButton("Fire2Joy" + m_IdNumber.ToString()) && m_PowerUpSlot != null)
-        {            
+        if (Input.GetButtonDown("Fire2Joy" + m_IdNumber.ToString()) && m_PowerUpSlot != null)
+        {
             m_PowerUpSlot.Fire(m_Transform);
         }        
     }
@@ -394,6 +484,7 @@ public class PlayerController : MonoBehaviour
 
     public void Hit(float damage, float impactForce, GameObject missile)
     {
+        MissileController missileController = missile.GetComponent<MissileController>();
         Vector3 force = (m_Transform.position - missile.transform.position).normalized * impactForce;
         float impactMovimentTime = 0.5f;
         switch (m_State)
@@ -406,8 +497,8 @@ public class PlayerController : MonoBehaviour
                     m_State = "Damaged";
                     m_Energy = 0.0f;
                 }
-                m_ImpactMovementList.Add(new ImpactMovement(force, impactMovimentTime));                                                
-                Destroy(missile);
+                m_ImpactMovementList.Add(new ImpactMovement(force, impactMovimentTime));
+                missileController.Destroy();
                 break;
             case "Spinning":
                 missile.GetComponent<MissileController>().InvertMovement(m_IdNumber);
@@ -417,11 +508,63 @@ public class PlayerController : MonoBehaviour
             case "Damaged":
                 //m_DamagedTimer -= damage / 20;
                 m_ImpactMovementList.Add(new ImpactMovement(force, impactMovimentTime));
-                Destroy(missile);
+                missileController.Destroy();
                 break;
             default:
                 break;
         }        
+    }
+
+    public void Hit(float damage, float impactForce, Vector3 impactPosition)
+    {
+        Vector3 force = (m_Transform.position - impactPosition).normalized * impactForce;
+        float impactMovimentTime = 0.5f;
+        switch (m_State)
+        {
+            case "Default":
+            case "Spinning":
+                m_Energy -= damage;
+                m_EnergyRecoveryDelay = m_PlayerData.m_EnergyRecoveryDelay;
+                if (m_Energy <= 0.0f)
+                {
+                    m_State = "Damaged";
+                    m_Energy = 0.0f;
+                }
+                m_ImpactMovementList.Add(new ImpactMovement(force, impactMovimentTime));
+                break;
+            case "Loop":
+                break;
+            case "Damaged":
+                m_ImpactMovementList.Add(new ImpactMovement(force, impactMovimentTime));
+                break;
+            default:
+                break;
+        }
+    }
+
+    public void ApplyStatusEffect(string StatusName, float Intensity, float MaxValue)
+    {
+        switch (StatusName)
+        {
+            case "Slow":
+                m_PlayerSlowEffect.SetActive(true);
+                m_StatusEffect["Slow"] += Intensity;
+                float scale = Mathf.Lerp(0.0f, 1.0f, m_StatusEffect["Slow"] / 50.0f);
+                m_PlayerSlowEffectSmoke.transform.localScale = new Vector3(scale, scale, scale);
+                m_PlayerSlowEffectSnowFlakes.transform.localScale = new Vector3(scale, scale, scale);
+                if (m_StatusEffect["Slow"] >= MaxValue)
+                {
+                    m_StatusEffect["Slow"] = MaxValue;
+                }                    
+                else if(m_StatusEffect["Slow"] < 0.0f)
+                {
+                    m_StatusEffect["Slow"] = 0.0f;
+                    m_PlayerSlowEffect.SetActive(false);
+                }
+                break;
+            default:
+                break;
+        }
     }
 
     //Faz a animação da movimentação após o impacto com algum Missile
@@ -442,9 +585,14 @@ public class PlayerController : MonoBehaviour
     public void PowerUpCollision(PowerUp powerUp)
     {
         m_PowerUpSlot = powerUp;
-        m_CanvasPowerUpIcon.GetComponent<UnityEngine.UI.Image>().sprite = powerUp.m_Icon;
-        m_CanvasPowerUpIcon.gameObject.SetActive(true);
+        this.SetPowerUpIcon();
         m_PowerUpSlot.PickUp();
+    }
+
+    public void SetPowerUpIcon()
+    {
+        m_CanvasPowerUpIcon.GetComponent<UnityEngine.UI.Image>().sprite = m_PowerUpSlot.getIcon();
+        m_CanvasPowerUpIcon.gameObject.SetActive(true);
     }
 
     public void PassedWayPoint(WayPointController Waypoint)
@@ -465,9 +613,19 @@ public class PlayerController : MonoBehaviour
         
         if(WayPoint != null)
         {
-            Vector3 PointingVector = WayPoint.transform.position - m_PlayerWayPointArrow.transform.position;
-            m_PlayerWayPointArrow.transform.LookAt(WayPoint.transform);
-            //m_PlayerWayPointArrow.transform.rotation = Quaternion.FromToRotation(m_Transform.up, m_PlayerWayPointArrow.transform.forward);
+            float distance = Vector3.Distance(WayPoint.transform.position, m_Transform.position);
+            if (distance <= m_GameController.centerSphereSize * 0.3f)
+                m_PlayerWayPointArrow.SetActive(false);
+            else {
+                m_PlayerWayPointArrow.SetActive(true);                
+                float adj = Mathf.Abs(Mathf.Cos(Vector3.Angle(m_Transform.position - WayPoint.transform.position, m_Transform.up) * Mathf.PI / 180) * distance);
+                Vector3 v = WayPoint.transform.position + (m_Transform.up * adj);                
+                float y = Vector3.Angle(m_Transform.forward, (v - m_Transform.position).normalized);
+                float right = Vector3.Angle(m_Transform.right, (v - m_Transform.position).normalized); ;
+                if (right > 90)
+                    y = -y;
+                m_PlayerWayPointArrow.transform.localEulerAngles = new Vector3(90.0f, y, 0.0f);                                
+            }                        
         }
         else
             m_PlayerWayPointArrow.SetActive(false);
@@ -522,9 +680,39 @@ public class PlayerController : MonoBehaviour
         return m_IdNumber;
     }
 
+    public void setCharacterNumber(int number)
+    {
+        m_CharacterNumber = number;
+    }
+
+    public int getCharacterNumber()
+    {
+        return m_CharacterNumber;
+    }
+
+    public void setScreenPosition(int number)
+    {
+        m_ScreenPosition = number;
+    }
+
+    public int getScreenPosition()
+    {
+        return m_ScreenPosition;
+    }
+
+    public bool hasPowerUp()
+    {
+        if (m_PowerUpSlot == null)
+            return false;
+        else
+            return true;
+    }
+    
     public void emptyPowerUpSlot()
     {
         m_PowerUpSlot = null;
+        m_TriggerMissile = null;
+        m_CanvasPressBAgain.gameObject.SetActive(false);
         m_CanvasPowerUpIcon.gameObject.SetActive(false);
     }
     
