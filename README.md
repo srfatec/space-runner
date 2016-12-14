@@ -1,6 +1,6 @@
 # space-runner
 
-Um jogo multiplayer de corrida 3D para a plataforma XBOX ONE.
+Um jogo multiplayer de corrida 3D para a plataforma XBOX ONE desenvolvido com Unity3D.
 
-## Versão
-Unity 5.4.0
+## Versão da Unity
+Unity 5.3.0
